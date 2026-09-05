@@ -1,0 +1,98 @@
+# WSL / Ubuntu 用。配置先: ~/.zshrc
+# 既存設定の丸ごと上書きはせず、README のバックアップ・移行手順を参照。
+# 個別の Python / Node / CUDA / プロキシ設定は ~/.zshrc.local に置く。
+[[ -o interactive ]] || return
+
+# PATH: source を繰り返しても同じディレクトリを増やさない。
+typeset -U path PATH
+path=("$HOME/.local/bin" $path)
+export PATH
+
+# 履歴: tmux の別ペインとも共有する。
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=100000
+SAVEHIST=100000
+setopt SHARE_HISTORY
+setopt HIST_IGNORE_ALL_DUPS HIST_FIND_NO_DUPS HIST_SAVE_NO_DUPS
+setopt HIST_REDUCE_BLANKS
+# SHARE_HISTORY が追記も行うため、競合する設定は有効にしない。
+unsetopt INC_APPEND_HISTORY INC_APPEND_HISTORY_TIME
+
+# 補完 / Emacs 系キー操作
+# compinit の権限警告を -u などで無条件に無視しない。
+autoload -Uz compinit
+compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+bindkey -e
+
+# fzf: 0.44.1 の Ubuntu パッケージと、0.48.0 以降の両方に対応。
+if (( $+commands[fzf] )); then
+  autoload -Uz is-at-least
+  _myzsy_fzf_version="$(fzf --version 2>/dev/null)"
+  _myzsy_fzf_version="${_myzsy_fzf_version%% *}"
+  if is-at-least 0.48.0 "$_myzsy_fzf_version"; then
+    source <(fzf --zsh)
+  else
+    if [[ -r /usr/share/doc/fzf/examples/key-bindings.zsh ]]; then
+      source /usr/share/doc/fzf/examples/key-bindings.zsh
+    fi
+    if [[ -r /usr/share/doc/fzf/examples/completion.zsh ]]; then
+      source /usr/share/doc/fzf/examples/completion.zsh
+    fi
+  fi
+  unset _myzsy_fzf_version
+fi
+
+# ディレクトリ移動。補完の初期化後に読み込む。
+if (( $+commands[zoxide] )); then
+  eval "$(zoxide init zsh)"
+fi
+
+# 履歴からの入力候補
+if [[ -r "$HOME/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
+  source "$HOME/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+fi
+
+# 一覧・Git 操作。cat 自体は置換しない。
+if (( $+commands[eza] )); then
+  alias ll='eza -lah --git'
+  alias la='eza -a'
+  alias lt='eza --tree --level=2'
+else
+  alias ll='ls -lah'
+  alias la='ls -A'
+fi
+alias ..='cd ..'
+alias ...='cd ../..'
+alias gs='git status'
+alias gd='git diff'
+alias gl='git log --oneline --graph --decorate -20'
+if (( $+commands[lazygit] )); then
+  alias lg='lazygit'
+fi
+# 過去の設定で cat を bat にした場合も、この設定では解除する。
+if (( $+aliases[cat] )); then
+  unalias cat
+fi
+
+# 以前からの値があれば尊重する。既定は導入手順で入れる nano。
+export EDITOR="${EDITOR:-nano}"
+export VISUAL="${VISUAL:-$EDITOR}"
+export PAGER="${PAGER:-less}"
+
+# 端末固有設定。秘密情報や認証情報をリポジトリに登録しない。
+# ここに移す場合も、fzf / Starship / プラグインの二重初期化は避ける。
+[[ -r "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
+
+# プロンプト
+if (( $+commands[starship] )); then
+  eval "$(starship init zsh)"
+else
+  PROMPT='%F{cyan}%n@%m%f:%F{blue}%~%f %# '
+fi
+
+# 必ず最後に読み込む。
+if [[ -r "$HOME/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]]; then
+  source "$HOME/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+fi
